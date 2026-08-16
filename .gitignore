@@ -1,0 +1,31 @@
+# Python bytecode & virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.env
+.venv
+env/
+venv/
+
+# gem5 raw outputs & large configuration dumps
+# Keep raw dump directories out of Git (they will remain on your local disk)
+data/**/inj_*/
+data/**/stats.txt
+data/**/config.*
+data/**/fs/
+data/**/run.log
+*.ini
+m5out/
+
+# Explicitly KEEP consolidated summary data files
+!data/**/summary_*.csv
+!data/**/*.csv
+
+# Editor & OS temporary files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*~
