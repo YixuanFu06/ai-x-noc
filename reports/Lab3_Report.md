@@ -90,3 +90,61 @@ Generated plots in `ai-x-noc/reports/figures/`:
    * A 1D bidirectional ring has a bisection width of $2 \times 2 = 4$ links (2 in each direction).
    * A 4×4 2D mesh has a bisection width of $4 \times 2 = 8$ links.
    * The higher bisection bandwidth of the 2D Mesh allows it to sustain higher throughput without saturation under heavy uniform traffic, whereas the Ring's narrower bisection bandwidth leads to earlier congestion onset under high loads ($\sim 0.45$).
+
+---
+
+## 2. Task 2: Wormhole Flow-Control Implementation & Buffer Dimension Trade-off
+
+### 2.1 Microarchitecture & Code Implementation
+We implemented wormhole flow control with deep buffer support via the `--wormhole` flag:
+1. **Buffer Depth & Credit Initialization (`GarnetNetwork.cc` & `OutVcState.cc`):**
+   When `--wormhole` is passed, `m_buffers_per_ctrl_vc` is configured to **16**, providing 16 buffer slots per virtual channel.
+2. **Deep Buffer Ingestion (`InputUnit.cc`):**
+   In `InputUnit::wakeup()`, when `--wormhole` is enabled, subsequent single-flit packets (`HEAD_TAIL_`) entering an already active VC are permitted to buffer into the VC's FIFO queue rather than triggering an idle-state assertion.
+3. **Credit & VC State Management (`OutputUnit.cc` & `SwitchAllocator.cc`):**
+   * In `OutputUnit::has_free_vc()` and `select_free_vc()`, downstream availability is governed by `outVcState[vc].has_credit()` ($> 0$), allowing up to 16 packets to be pipelined consecutively.
+   * In `SwitchAllocator::arbitrate_outports()`, after forwarding a single-flit packet, if additional packets remain in the input VC queue, the next flit's output port is computed immediately via `m_router->route_compute()`, returning an incremental credit to the upstream router while **retaining VC active state (`free_signal = false`)**. Only when the input queue is completely drained is `free_signal = true` signaled.
+
+---
+
+### 2.2 Experimental Evaluation (3 Buffer Configurations)
+
+We performed 90 simulation runs across 15 injection rates ($0.01 \sim 0.50$) on a 16-node 4×4 Mesh under `uniform_random` and `tornado` traffic patterns.
+
+All raw and summary metrics are recorded in `ai-x-noc/data/lab3_task2/summary_lab3_task2.csv`.
+
+#### Quantitative Summary (Uniform Random Traffic, 16-Node 4×4 Mesh)
+
+| Microarchitectural Configuration | Virtual Channels (VCs) | Depth Per VC | Total Slots / Port | Zero-Load Latency | Saturation Ingestion Rate | Max Sustained Throughput |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Config 1: `VC = 1, Depth = 1`** | **1** | **1** | 1 Flit | **5.01 Cycles** | **~ 0.20** | **~ 0.259 pkts/node/cycle** |
+| **Config 2: `VC = 16, Depth = 1`** | **16** | **1** | 16 Flits | **4.97 Cycles** | **> 0.50** | **~ 0.497 pkts/node/cycle** |
+| **Config 3: `VC = 1, Depth = 16 (Wormhole)`** | **1** | **16** | 16 Flits | **4.98 Cycles** | **~ 0.35 - 0.40** | **~ 0.398 pkts/node/cycle** |
+
+---
+
+### 2.3 Visualizations
+
+Generated plots in `ai-x-noc/reports/figures/`:
+* **Combined Buffer Dimension Trade-off**: `figures/lab3_task2_combined_buffer_analysis.png`
+* **Uniform Random Comparison**: `figures/lab3_task2_comparison_uniform_random.png`
+* **Tornado Comparison**: `figures/lab3_task2_comparison_tornado.png`
+
+---
+
+### 2.4 In-Depth Comparative Analysis
+
+#### 1. `VC = 1, Depth = 1` vs. `VC = 1, Depth = 16 (Wormhole)` (Impact of Buffer Depth)
+* **Performance Gain:** Increasing buffer depth from 1 to 16 within a single VC raises the network saturation threshold dramatically from **$0.20$ to $0.40$**, boosting peak throughput by **$+53.7\%$** ($0.259 \to 0.398\text{ pkts/node/cycle}$).
+* **Mechanism:** With only 1 buffer slot, a transient pipeline stall at a downstream router immediately blocks upstream links, causing rapid congestion propagation and buffer starvation across the network. Deep buffering absorbs burstiness and decouples upstream injection from transient downstream stalls.
+
+#### 2. `VC = 16, Depth = 1` vs. `VC = 1, Depth = 16 (Wormhole)` (VC Dimension vs. Depth Dimension Trade-off)
+Under an identical total buffering budget of **16 flits per port**:
+* **Throughput & Head-of-Line (HoL) Blocking:**
+  * `VC = 16, Depth = 1` achieves higher sustained throughput ($> 0.50$) than `VC = 1, Depth = 16` ($~ 0.40$).
+  * **Cause:** In `VC = 1, Depth = 16`, packets are queued sequentially in a single FIFO. If the head-of-line packet is blocked waiting for a congested outport, all following packets in the FIFO—even those destined for idle output ports—are blocked (**Intra-VC Head-of-Line Blocking**).
+  * In `VC = 16, Depth = 1`, 16 independent virtual channels allow packets destined for non-congested ports to bypass blocked packets completely (**Inter-VC HoL Elimination**).
+* **Hardware Complexity & Silicon Area Trade-off:**
+  * `VC = 1, Depth = 16 (Wormhole)` requires only a **1-bit VC allocator**, simple 1-way arbitration, and standard FIFO circular pointers.
+  * `VC = 16, Depth = 1` requires a **16-way VC allocator**, multi-stage arbiters, and extensive multiplexing logic, consuming substantially more silicon area and dynamic switching energy.
+  * **Architectural Insight:** Wormhole flow control (`VC = 1, Depth = 16`) offers a highly area-efficient compromise, delivering ~80% of multi-VC throughput at a fraction of the control logic complexity.
