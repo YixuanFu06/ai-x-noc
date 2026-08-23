@@ -1,7 +1,6 @@
 # Lab 2 Report: Performance Analysis of NoC
 
-**Course:** Network-on-Chip (NoC) / Computer Architecture  
-**Author:** Yixuan Fu  
+**Course:** AI+X Computing Acceleration
 **Date:** August 2026  
 **Environment:** gem5 v23.0.0.1 (Garnet 3.0 Standalone, Ubuntu 20.04 on WSL)
 

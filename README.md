@@ -1,6 +1,6 @@
 # ai-x-noc: Network-on-Chip (NoC) Labs
 
-This repository contains the complete lab assignments and research implementations for the **AI & X** course, built upon the **gem5 simulator** (v23.0.0.1) and its **Garnet 3.0** on-chip interconnection network model.
+This repository contains the complete lab assignments and research implementations for the **AI+X Computing Acceleration** course, built upon the **gem5 simulator** (v23.0.0.1) and its **Garnet 3.0** on-chip interconnection network model.
 
 ---
 
